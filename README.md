@@ -40,23 +40,23 @@ import (
 )
 
 func main() {
-	// Initialize and start your Raft node
-	node, err := easyraft.NewEasyRaft(
-		ctx,
-		"localhost:6969",
-		logger,
-		logStore,
-		stableStore,
-		snapshotStore,
-		transport,
-		) // Set your own configuration parameters 
+    // Initialize and start your Raft node
+    node, err := easyraft.NewEasyRaft(
+        ctx,
+        "localhost:6969",
+        logger,
+        logStore,
+        stableStore,
+        snapshotStore,
+        transport,
+        ) // Set your own configuration parameters 
     
     // Handle error
-	
-	defer node.Shutdown()
-
-	raft := node.Raft()
-	raft.Apply([]byte("some cmd"), time.Second*5) 	// Your application logic here
+    
+    defer node.Shutdown()
+    
+    raft := node.Raft()
+    raft.Apply([]byte("some cmd"), time.Second*5) 	// Your application logic here
 }
 
 ```
