@@ -55,7 +55,6 @@ func (fsm *fsm) Apply(rlog *raft.Log) (result interface{}) {
 				return err
 			}
 		}
-
 	}
 
 	fsm.prevState = make(KVState, len(*fsm.state))
@@ -85,12 +84,15 @@ func (fsm *fsm) Snapshot() (raft.FSMSnapshot, error) {
 }
 
 // Restore takes a snapshot and sets the current state from it.
-func (fsm *fsm) Restore(reader io.ReadCloser) error {
-	defer reader.Close()
+func (fsm *fsm) Restore(reader io.ReadCloser) (err error) {
+	defer func() {
+		err = reader.Close()
+	}()
+
 	fsm.mux.Lock()
 	defer fsm.mux.Unlock()
 
-	err := msgpack.NewDecoder(reader).Decode(fsm.state)
+	err = msgpack.NewDecoder(reader).Decode(fsm.state)
 	if err != nil {
 		return err
 	}
