@@ -23,13 +23,14 @@ type (
 
 type raftService struct {
 	ctx       context.Context
-	raft      *raft.Raft
-	transport *raft.NetworkTransport
-	raftID    raft.ServerID
+	raft      *Raft
+	transport Transporter
+	raftID    ServerID
 	syncMx    *sync.RWMutex
 	log       Logger
 }
 
+// NewEasyRaftInMemory is not going to network - for testing purposes
 func NewEasyRaftInMemory(
 	ctx context.Context,
 	addr string,
@@ -90,8 +91,11 @@ func NewEasyRaft(
 	config.ElectionTimeout = config.HeartbeatTimeout
 	config.LeaderLeaseTimeout = config.HeartbeatTimeout
 	config.CommitTimeout = time.Second * 30
-	config.Logger = logger
 	config.LocalID = raft.ServerID(addr)
+
+	if logger != nil {
+		config.Logger = logger
+	}
 
 	if err := raft.ValidateConfig(config); err != nil {
 		return nil, err
@@ -103,18 +107,17 @@ func NewEasyRaft(
 		if err != nil {
 			return nil, err
 		}
-		r.transport, err = raft.NewTCPTransport(addr, netAddr, 100, time.Second*5, os.Stderr)
+		transport, err = raft.NewTCPTransport(addr, netAddr, 100, time.Second*5, os.Stderr)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	err = r.forceBootstrap(
+	if err = r.forceBootstrap(
 		config.LocalID,
 		logStore,
 		stableStore,
-	)
-	if err != nil {
+	); err != nil {
 		return nil, err
 	}
 
@@ -124,7 +127,7 @@ func NewEasyRaft(
 		logStore,
 		stableStore,
 		snapshotStore,
-		r.transport,
+		transport,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create raft node: %w", err)
@@ -382,7 +385,6 @@ func (r *raftService) Raft() *Raft {
 	r.waitSync()
 
 	return r.raft
-
 }
 
 func (r *raftService) waitSync() {
@@ -395,7 +397,6 @@ func (r *raftService) Shutdown() {
 		return
 	}
 
-	_ = r.transport.Close()
 	wait := r.raft.Shutdown()
 	if wait != nil && wait.Error() != nil {
 		r.log.Error("failed to shutdown raft:", wait.Error())
