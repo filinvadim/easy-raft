@@ -30,6 +30,8 @@ type raftService struct {
 	log       Logger
 }
 
+var once = new(sync.Once)
+
 // NewEasyRaftInMemory is not going to network - for testing purposes
 func NewEasyRaftInMemory(
 	ctx context.Context,
@@ -151,30 +153,35 @@ func (r *raftService) forceBootstrap(
 		return fmt.Errorf("failed to read last log index: %v", err)
 	}
 
-	if lastIndex != 0 {
+	if lastIndex != 0 { // already bootstrapped
 		return nil
 	}
-	r.log.Debug("bootstrapping a new cluster with server id:", addr)
 
-	// force Raft to create single node cluster no matter what
-	raftConf := raft.Configuration{}
-	raftConf.Servers = append(raftConf.Servers, raft.Server{
-		Suffrage: raft.Voter,
-		ID:       addr,
-		Address:  raft.ServerAddress(addr),
+	once.Do(func() {
+		r.log.Debug("bootstrapping a new cluster with server id:", addr)
+
+		// force Raft to create single node cluster no matter what
+		raftConf := raft.Configuration{}
+		raftConf.Servers = append(raftConf.Servers, raft.Server{
+			Suffrage: raft.Voter,
+			ID:       addr,
+			Address:  raft.ServerAddress(addr),
+		})
+
+		if err := stableStore.SetUint64([]byte("CurrentTerm"), 1); err != nil {
+			r.log.Error("failed to save current term:", err)
+			return
+		}
+		if err := logStore.StoreLog(&raft.Log{
+			Type: raft.LogConfiguration, Index: 1, Term: 1,
+			Data: raft.EncodeConfiguration(raftConf),
+		}); err != nil {
+			r.log.Error("failed to store bootstrap log:", err)
+			return
+		}
 	})
 
-	if err := stableStore.SetUint64([]byte("CurrentTerm"), 1); err != nil {
-		return fmt.Errorf("failed to save current term: %v", err)
-	}
-	if err := logStore.StoreLog(&raft.Log{
-		Type: raft.LogConfiguration, Index: 1, Term: 1,
-		Data: raft.EncodeConfiguration(raftConf),
-	}); err != nil {
-		return fmt.Errorf("failed to store bootstrap log: %v", err)
-	}
-
-	return logStore.GetLog(1, &raft.Log{})
+	return nil
 }
 
 type raftSync struct {
