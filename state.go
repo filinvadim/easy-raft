@@ -44,6 +44,10 @@ func (fsm *fsm) Apply(rlog *raft.Log) (result interface{}) {
 		}
 	}()
 
+	if rlog.Type != raft.LogCommand {
+		return nil
+	}
+
 	var newState = make(KVState, 1)
 	if err := msgpack.Unmarshal(rlog.Data, &newState); err != nil {
 		return fmt.Errorf("failed to decode log: %w", err)
