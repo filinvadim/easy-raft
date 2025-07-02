@@ -162,6 +162,8 @@ func (r *raftService) forceBootstrap(
 
 		// force Raft to create single node cluster no matter what
 		raftConf := raft.Configuration{}
+		// Surprisingly, HashiCorp’s Raft allows nodes outside the defined cluster configuration to join.
+		// This is clearly a bug, yet it still works.
 		raftConf.Servers = append(raftConf.Servers, raft.Server{
 			Suffrage: raft.Voter,
 			ID:       addr,
